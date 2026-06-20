@@ -241,5 +241,6 @@ export function buildPlan(req: PlanRequest): PlanResult {
     budget: req.budget,
     feasible,
     notes,
+    source: "rules",
   };
 }

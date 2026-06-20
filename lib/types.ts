@@ -62,4 +62,6 @@ export interface PlanResult {
   budget: number;
   feasible: boolean;
   notes: string[];
+  /** Which engine produced the plan. */
+  source: "gemini" | "rules";
 }

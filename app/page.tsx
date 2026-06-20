@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { ChefHat, TriangleAlert, Wallet } from "lucide-react";
+import { ChefHat, ShieldCheck, Sparkles, TriangleAlert, Wallet } from "lucide-react";
 import type { Diet, PlanResult } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +56,11 @@ export default function Home() {
   const [result, setResult] = useState<PlanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // CAPTCHA challenge issued by the server on every 3rd generation.
+  const [captcha, setCaptcha] = useState<{ question: string; token: string } | null>(
+    null
+  );
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
 
   const toggleAllergen = (tag: string, checked: boolean) => {
     setExclude((prev) =>
@@ -63,25 +68,52 @@ export default function Home() {
     );
   };
 
-  async function onSubmit(event: React.FormEvent) {
-    event.preventDefault();
+  async function requestPlan(captchaPayload?: { token: string; answer: number }) {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ people, budget, diet, maxPrepMinutes: maxPrep, exclude }),
+        body: JSON.stringify({
+          people,
+          budget,
+          diet,
+          maxPrepMinutes: maxPrep,
+          exclude,
+          captcha: captchaPayload,
+        }),
       });
       const data = await res.json();
+
+      if (res.status === 401 && data.captchaRequired) {
+        setCaptcha(data.captcha);
+        setCaptchaAnswer("");
+        setError(data.error ?? "Please verify to continue.");
+        return;
+      }
       if (!res.ok) throw new Error(data.error ?? "Request failed.");
+
       setResult(data as PlanResult);
+      setCaptcha(null);
+      setCaptchaAnswer("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error.");
       setResult(null);
     } finally {
       setLoading(false);
     }
+  }
+
+  function onSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    void requestPlan();
+  }
+
+  function onVerify(event: React.FormEvent) {
+    event.preventDefault();
+    if (!captcha) return;
+    void requestPlan({ token: captcha.token, answer: Number(captchaAnswer) });
   }
 
   return (
@@ -199,11 +231,48 @@ export default function Home() {
         </CardContent>
       </Card>
 
+      {captcha && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="size-5" aria-hidden />
+              Quick verification
+            </CardTitle>
+            <CardDescription>
+              A quick check is required for this plan.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={onVerify}>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor={`${id}-captcha`}>
+                    {captcha.question}
+                  </FieldLabel>
+                  <Input
+                    id={`${id}-captcha`}
+                    type="number"
+                    inputMode="numeric"
+                    required
+                    autoFocus
+                    value={captchaAnswer}
+                    onChange={(e) => setCaptchaAnswer(e.target.value)}
+                  />
+                </Field>
+                <Button type="submit" disabled={loading} className="w-fit">
+                  {loading ? "Verifying…" : "Verify & generate"}
+                </Button>
+              </FieldGroup>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       <div aria-live="polite" className="flex flex-col gap-6">
         {error && (
           <Alert variant="destructive" role="alert">
             <TriangleAlert />
-            <AlertTitle>Couldn&apos;t generate a plan</AlertTitle>
+            <AlertTitle>Heads up</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -216,6 +285,13 @@ export default function Home() {
 function PlanView({ plan }: { plan: PlanResult }) {
   return (
     <>
+      <div className="flex items-center gap-2">
+        <Badge variant={plan.source === "gemini" ? "default" : "secondary"}>
+          <Sparkles className="size-3" aria-hidden />
+          {plan.source === "gemini" ? "AI · Gemini" : "Rule-based"}
+        </Badge>
+      </div>
+
       <Alert variant={plan.feasible ? "default" : "destructive"}>
         <Wallet />
         <AlertTitle>
