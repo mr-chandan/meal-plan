@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🍳 Cooking To-Do Planner
 
-## Getting Started
+A small AI micro-app that turns a few facts about your day into a personal
+cooking to-do list: a **breakfast / lunch / dinner plan**, a consolidated
+**grocery list**, smart **substitutions** (diet, allergens, budget) and a
+**budget feasibility** check.
 
-First, run the development server:
+Built with Next.js 16 (App Router), TypeScript, Tailwind v4 and shadcn/ui
+(neutral black-and-white theme).
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # http://localhost:3000
+npm test         # unit tests (Node built-in test runner)
+npm run build    # production build + type-check
+npm run lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## How it works
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The planner is a **pure, deterministic** core in `lib/` — no external API keys,
+no network calls — so it's fast, secure and fully testable.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| File | Responsibility |
+| --- | --- |
+| `lib/types.ts` | Domain types |
+| `lib/recipes.ts` | Recipe bank + substitution rules |
+| `lib/planner.ts` | Input validation + plan generation |
+| `lib/planner.test.ts` | Unit tests |
+| `app/api/plan/route.ts` | POST endpoint (validates, returns JSON) |
+| `app/page.tsx` | Accessible UI built from shadcn components |
 
-## Learn More
+### Planning logic
 
-To learn more about Next.js, take a look at the following resources:
+1. Pick the cheapest recipe per meal slot that fits the diet and prep-time limit.
+2. Apply **substitutions** for excluded allergens and stricter diets
+   (e.g. vegan swaps ghee → plant-based).
+3. Aggregate ingredients into a single grocery list, scaled by number of people.
+4. **Budget feasibility**: if the total exceeds the budget, swap the priciest
+   items for cheaper alternatives, then report whether the plan fits.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Design notes (scoring rubric)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Code quality** — small pure modules, typed end-to-end, no duplication.
+- **Problem alignment** — covers all four required outputs (plan, grocery,
+  substitutions, budget logic).
+- **Security** — all request input is validated and clamped in
+  `parsePlanRequest`; internal errors never leak to the client.
+- **Efficiency** — O(recipes) selection, Map-based grocery aggregation, static
+  page + dynamic API route only.
+- **Testing** — 8 unit tests covering validation, scaling, substitutions and
+  budget edge cases.
+- **Accessibility** — semantic headings, labelled fields, `FieldSet`/legend for
+  checkboxes, `aria-live` results region and keyboard-friendly shadcn controls.
